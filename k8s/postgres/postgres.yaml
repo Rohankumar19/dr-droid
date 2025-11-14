@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: microservices-demo
+data:
+  POSTGRES_DB: orders
+  POSTGRES_USER: orderuser
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: microservices-demo
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: orderpass123
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: microservices-demo
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: microservices-demo
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: microservices-demo
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        - secretRef:
+            name: postgres-secret
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+          subPath: postgres
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-init
+  namespace: microservices-demo
+spec:
+  template:
+    spec:
+      containers:
+      - name: init
+        image: postgres:15-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          until pg_isready -h postgres -U orderuser; do
+            echo "Waiting for postgres..."
+            sleep 2
+          done
+          
+          PGPASSWORD=orderpass123 psql -h postgres -U orderuser -d orders <<EOF
+          CREATE TABLE IF NOT EXISTS orders (
+            order_id VARCHAR(255) PRIMARY KEY,
+            user_id VARCHAR(255) NOT NULL,
+            user_currency VARCHAR(10) NOT NULL,
+            total_amount DECIMAL(10, 2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          
+          CREATE TABLE IF NOT EXISTS order_items (
+            id SERIAL PRIMARY KEY,
+            order_id VARCHAR(255) REFERENCES orders(order_id),
+            product_id VARCHAR(255) NOT NULL,
+            quantity INTEGER NOT NULL,
+            cost DECIMAL(10, 2) NOT NULL
+          );
+          
+          CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
+          CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
+          EOF
+      restartPolicy: OnFailure
+  backoffLimit: 5

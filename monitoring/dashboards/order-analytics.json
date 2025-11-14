@@ -1,0 +1,67 @@
+{
+  "dashboard": {
+    "title": "Order Analytics (Bonus)",
+    "tags": ["orders", "database", "analytics"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Total Orders",
+        "type": "stat",
+        "description": "Total number of orders in database",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Orders Today",
+        "type": "stat",
+        "description": "Orders placed today",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Total Revenue",
+        "type": "stat",
+        "description": "Total revenue from all orders",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+      },
+      {
+        "id": 4,
+        "title": "Average Order Value",
+        "type": "stat",
+        "description": "Average order amount",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+      },
+      {
+        "id": 5,
+        "title": "Orders Over Time",
+        "type": "graph",
+        "description": "Order count by hour",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+      },
+      {
+        "id": 6,
+        "title": "Revenue Over Time",
+        "type": "graph",
+        "description": "Revenue by hour",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+      },
+      {
+        "id": 7,
+        "title": "Top Products",
+        "type": "table",
+        "description": "Most ordered products",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+      },
+      {
+        "id": 8,
+        "title": "Orders by Currency",
+        "type": "piechart",
+        "description": "Distribution of orders by currency",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12}
+      }
+    ],
+    "refresh": "1m",
+    "time": {"from": "now-24h", "to": "now"}
+  }
+}

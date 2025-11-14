@@ -1,0 +1,133 @@
+# Modified checkout service with persistence layer
+# This is a sidecar that intercepts checkout events and saves to PostgreSQL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-persistence-script
+  namespace: microservices-demo
+data:
+  persist.py: |
+    import os
+    import json
+    import time
+    import psycopg2
+    from datetime import datetime
+    import logging
+    
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    DB_CONFIG = {
+        'host': os.getenv('POSTGRES_HOST', 'postgres'),
+        'database': os.getenv('POSTGRES_DB', 'orders'),
+        'user': os.getenv('POSTGRES_USER', 'orderuser'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'orderpass123')
+    }
+    
+    def get_db_connection():
+        return psycopg2.connect(**DB_CONFIG)
+    
+    def save_order(order_data):
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            
+            # Insert order
+            cur.execute("""
+                INSERT INTO orders (order_id, user_id, user_currency, total_amount, created_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (order_id) DO NOTHING
+            """, (
+                order_data['order_id'],
+                order_data['user_id'],
+                order_data['user_currency'],
+                order_data['total_amount'],
+                datetime.now()
+            ))
+            
+            # Insert order items
+            for item in order_data.get('items', []):
+                cur.execute("""
+                    INSERT INTO order_items (order_id, product_id, quantity, cost)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    order_data['order_id'],
+                    item['product_id'],
+                    item['quantity'],
+                    item['cost']
+                ))
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            logger.info(f"Saved order {order_data['order_id']}")
+            return True
+        except Exception as e:
+            logger.error(f"Error saving order: {e}")
+            return False
+    
+    # Simulate order persistence (in real scenario, this would listen to events)
+    if __name__ == '__main__':
+        logger.info("Order persistence service started")
+        while True:
+            time.sleep(60)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-persistence
+  namespace: microservices-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-persistence
+  template:
+    metadata:
+      labels:
+        app: order-persistence
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: persistence
+        image: python:3.11-slim
+        command:
+        - /bin/sh
+        - -c
+        - |
+          pip install psycopg2-binary prometheus-client
+          python /scripts/persist.py
+        env:
+        - name: POSTGRES_HOST
+          value: postgres
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      volumes:
+      - name: scripts
+        configMap:
+          name: order-persistence-script

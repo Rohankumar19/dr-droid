@@ -1,0 +1,114 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k6-script
+  namespace: microservices-demo
+data:
+  script.js: |
+    import http from 'k6/http';
+    import { sleep, check } from 'k6';
+    import { Rate } from 'k6/metrics';
+    
+    const errorRate = new Rate('errors');
+    
+    export const options = {
+      stages: [
+        { duration: '2m', target: 10 },  // Ramp up to 10 users
+        { duration: '5m', target: 10 },  // Stay at 10 users
+        { duration: '2m', target: 20 },  // Ramp up to 20 users
+        { duration: '5m', target: 20 },  // Stay at 20 users
+        { duration: '2m', target: 0 },   // Ramp down to 0 users
+      ],
+      thresholds: {
+        'http_req_duration': ['p(95)<500'],
+        'errors': ['rate<0.1'],
+      },
+    };
+    
+    const BASE_URL = 'http://frontend';
+    
+    const products = [
+      'OLJCESPC7Z', // Sunglasses
+      '66VCHSJNUP', // Tank Top
+      '1YMWWN1N4O', // Watch
+      'L9ECAV7KIM', // Loafers
+      '2ZYFJ3GM2N', // Hairdryer
+      '0PUK6V6EV0', // Candle Holder
+      'LS4PSXUNUM', // Salt & Pepper Shakers
+      '9SIQT8TOJO', // Bamboo Glass Jar
+      '6E92ZMYYFZ', // Mug
+    ];
+    
+    const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD'];
+    
+    function getRandomProduct() {
+      return products[Math.floor(Math.random() * products.length)];
+    }
+    
+    function getRandomCurrency() {
+      return currencies[Math.floor(Math.random() * currencies.length)];
+    }
+    
+    export default function () {
+      // Visit homepage
+      let res = http.get(BASE_URL);
+      check(res, {
+        'homepage status is 200': (r) => r.status === 200,
+      }) || errorRate.add(1);
+      sleep(1);
+      
+      // Browse products
+      const productId = getRandomProduct();
+      res = http.get(`${BASE_URL}/product/${productId}`);
+      check(res, {
+        'product page status is 200': (r) => r.status === 200,
+      }) || errorRate.add(1);
+      sleep(2);
+      
+      // Add to cart
+      res = http.post(`${BASE_URL}/cart`, {
+        product_id: productId,
+        quantity: Math.floor(Math.random() * 3) + 1,
+      });
+      check(res, {
+        'add to cart successful': (r) => r.status === 200 || r.status === 303,
+      }) || errorRate.add(1);
+      sleep(1);
+      
+      // View cart
+      res = http.get(`${BASE_URL}/cart`);
+      check(res, {
+        'cart page status is 200': (r) => r.status === 200,
+      }) || errorRate.add(1);
+      sleep(2);
+      
+      // Set currency (randomly)
+      if (Math.random() > 0.5) {
+        res = http.post(`${BASE_URL}/setCurrency`, {
+          currency_code: getRandomCurrency(),
+        });
+        sleep(1);
+      }
+      
+      // Checkout (10% of users)
+      if (Math.random() > 0.9) {
+        res = http.post(`${BASE_URL}/cart/checkout`, {
+          email: `user${__VU}@example.com`,
+          street_address: '123 Main St',
+          zip_code: '12345',
+          city: 'Springfield',
+          state: 'IL',
+          country: 'United States',
+          credit_card_number: '4432-8015-6152-0454',
+          credit_card_expiration_month: '12',
+          credit_card_expiration_year: '2025',
+          credit_card_cvv: '123',
+        });
+        check(res, {
+          'checkout successful': (r) => r.status === 200 || r.status === 303,
+        }) || errorRate.add(1);
+        sleep(3);
+      }
+      
+      sleep(Math.random() * 3 + 2);
+    }

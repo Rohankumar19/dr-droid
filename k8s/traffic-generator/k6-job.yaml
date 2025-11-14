@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: k6-load-test
+  namespace: microservices-demo
+spec:
+  schedule: "*/15 * * * *"  # Run every 15 minutes
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: k6-load-test
+        spec:
+          containers:
+          - name: k6
+            image: grafana/k6:latest
+            command:
+            - k6
+            - run
+            - /scripts/script.js
+            volumeMounts:
+            - name: k6-script
+              mountPath: /scripts
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 256Mi
+          volumes:
+          - name: k6-script
+            configMap:
+              name: k6-script
+          restartPolicy: OnFailure
+---
+# One-time job to start traffic immediately
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-initial-load
+  namespace: microservices-demo
+spec:
+  template:
+    metadata:
+      labels:
+        app: k6-load-test
+    spec:
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command:
+        - k6
+        - run
+        - /scripts/script.js
+        volumeMounts:
+        - name: k6-script
+          mountPath: /scripts
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+      volumes:
+      - name: k6-script
+        configMap:
+          name: k6-script
+      restartPolicy: OnFailure
+  backoffLimit: 3
