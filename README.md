@@ -86,6 +86,33 @@ kubectl port-forward -n microservices-demo svc/frontend 8080:80
 kubectl exec -it -n microservices-demo deployment/postgres -- psql -U orderuser -d orders
 ```
 
+## ✅ Verify Installation
+
+After deployment, verify everything is working:
+
+**Linux/Mac:**
+```bash
+chmod +x scripts/verify.sh && ./scripts/verify.sh
+```
+
+**Windows:**
+```powershell
+.\scripts\verify.ps1
+```
+
+**Manual checks:**
+```bash
+# Check all pods are running
+kubectl get pods -n microservices-demo
+kubectl get pods -n monitoring
+
+# Check services
+kubectl get svc -n microservices-demo
+kubectl get svc -n monitoring
+```
+
+**📖 Detailed Testing**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive verification steps.
+
 ## 📊 Dashboards
 
 Once Grafana is running, you'll have access to:
